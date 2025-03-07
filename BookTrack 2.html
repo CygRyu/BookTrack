@@ -1,0 +1,2401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookTrack - Personal Reading Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-base64@3.7.5/base64.min.js"></script>
+    <style>
+        .heat-map-cell {
+            width: 12px;
+            height: 12px;
+            margin: 1px;
+            border-radius: 2px;
+            transition: transform 0.2s ease;
+        }
+        .heat-map-cell:hover {
+            transform: scale(1.5);
+        }
+        .reading-chain {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        .chain-link {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .chain-link:hover {
+            transform: translateY(-5px);
+        }
+        .bookshelf {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .book-spine {
+            height: 100px;
+            margin: 0 1px;
+            transition: transform 0.3s ease;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+        .book-spine:hover {
+            transform: translateY(-5px);
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        /* Light and dark mode transitions */
+        .transition-colors {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track, #f1f1f1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb, #888);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover, #555);
+        }
+        /* Dark mode scrollbar */
+        .dark {
+            --scrollbar-track: #2d3748;
+            --scrollbar-thumb: #4a5568;
+            --scrollbar-thumb-hover: #718096;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        'primary-dark': '#4b4ba8',
+                    },
+                }
+            }
+        };
+    </script>
+</head>
+<body class="transition-colors bg-gray-50 dark:bg-gray-900 dark:text-white min-h-screen flex flex-col">
+    <!-- App Header -->
+    <header class="bg-white dark:bg-gray-800 shadow-md transition-colors">
+        <div class="container mx-auto px-4 py-4 flex flex-wrap justify-between items-center">
+            <div class="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <h1 class="ml-2 text-2xl font-bold text-gray-800 dark:text-white">BookTrack</h1>
+            </div>
+            <nav class="flex items-center space-x-2 mt-2 sm:mt-0">
+                <button id="dashboardBtn" class="px-3 py-2 text-sm font-medium rounded-md bg-primary text-white hover:bg-primary-dark transition-colors">
+                    Dashboard
+                </button>
+                <button id="libraryBtn" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    Library
+                </button>
+                <button id="settingsBtn" class="p-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </button>
+                <button id="themeToggleBtn" class="p-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 moon hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sun dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-6">
+        <!-- Dashboard View -->
+        <div id="dashboardView" class="fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Reading Streak Card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
+                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Reading Streak
+                    </h2>
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <span id="currentStreak" class="text-3xl font-bold text-primary">0</span>
+                            <span class="text-sm text-gray-500 dark:text-gray-400 ml-1">days</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Longest streak</div>
+                            <div id="longestStreak" class="font-medium">0 days</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your reading chain</div>
+                        <div id="readingChain" class="reading-chain py-1"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 italic">
+                        You have 1 recovery day available if you miss a day
+                    </div>
+                </div>
+
+                <!-- Current Book Card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
+                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        Current Book
+                    </h2>
+                    <div id="currentBookEmpty" class="text-center py-6 text-gray-500 dark:text-gray-400">
+                        <p>No book in progress.</p>
+                        <button id="startReadingBtn" class="mt-2 px-3 py-1 bg-primary text-white text-sm rounded-md hover:bg-primary-dark transition-colors">
+                            Start Reading
+                        </button>
+                    </div>
+                    <div id="currentBookCard" class="hidden">
+                        <h3 id="currentBookTitle" class="font-medium text-gray-800 dark:text-white text-lg mb-1"></h3>
+                        <p id="currentBookAuthor" class="text-gray-600 dark:text-gray-300 text-sm mb-3"></p>
+                        
+                        <div class="mb-3">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-600 dark:text-gray-300">Progress</span>
+                                <span id="currentBookProgress" class="font-medium">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div id="currentBookProgressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Pages read</div>
+                                <div id="pagesRead" class="font-medium">0 / 0</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Reading pace</div>
+                                <div id="readingPace" class="font-medium">0 pages/day</div>
+                            </div>
+                        </div>
+
+                        <div id="forecastContainer" class="mb-3 text-sm text-gray-600 dark:text-gray-300">
+                            <p id="readingForecast">At your current pace, you'll finish by -</p>
+                        </div>
+
+                        <div class="flex space-x-2">
+                            <button id="updateProgressBtn" class="px-3 py-1 bg-primary text-white text-sm rounded-md hover:bg-primary-dark transition-colors flex-grow">
+                                Update Progress
+                            </button>
+                            <button id="just5MoreBtn" class="px-3 py-1 bg-green-500 text-white text-sm rounded-md hover:bg-green-600 transition-colors">
+                                +5 Pages
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reading Calendar Card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
+                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Reading Activity
+                    </h2>
+                    <div class="mb-2 flex justify-between items-center">
+                        <div id="calendarYear" class="text-sm font-medium text-gray-700 dark:text-gray-300"></div>
+                        <div class="flex space-x-1">
+                            <button id="prevYearBtn" class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+                            <button id="nextYearBtn" class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="heatMapContainer" class="heat-map-container"></div>
+                    <div class="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Less</span>
+                        <div class="flex items-center">
+                            <div class="heat-map-cell bg-gray-200 dark:bg-gray-700"></div>
+                            <div class="heat-map-cell bg-primary opacity-25"></div>
+                            <div class="heat-map-cell bg-primary opacity-50"></div>
+                            <div class="heat-map-cell bg-primary opacity-75"></div>
+                            <div class="heat-map-cell bg-primary"></div>
+                        </div>
+                        <span>More</span>
+                    </div>
+                </div>
+
+                <!-- Personal Records Card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
+                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                        </svg>
+                        Personal Records
+                    </h2>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Most pages in one day</div>
+                            <div id="mostPagesDay" class="font-medium">0 pages</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Fastest book completion</div>
+                            <div id="fastestRead" class="font-medium">None yet</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Longest book read</div>
+                            <div id="longestBook" class="font-medium">None yet</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Most active reading day</div>
+                            <div id="mostActiveDay" class="font-medium">None yet</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Total pages read</div>
+                            <div id="totalPagesRead" class="font-medium">0 pages</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reading Stats Card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
+                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        Reading Stats
+                    </h2>
+                    <div>
+                        <canvas id="readingStatsChart" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Virtual Bookshelf Card -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
+                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        Virtual Bookshelf
+                    </h2>
+                    <div id="emptyBookshelf" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <p>Your bookshelf is empty.</p>
+                        <p class="text-sm mt-1">Books you finish will appear here.</p>
+                    </div>
+                    <div id="virtualBookshelf" class="bookshelf" style="height: 120px; overflow-x: auto;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Library View -->
+        <div id="libraryView" class="fade-in hidden">
+            <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Your Library</h2>
+                <div class="flex flex-wrap gap-2">
+                    <div class="relative">
+                        <input type="text" id="searchBooks" placeholder="Search books..." class="pl-9 pr-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm text-base focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <select id="filterGenre" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                        <option value="">All Genres</option>
+                    </select>
+                    <select id="filterStatus" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                        <option value="">All Statuses</option>
+                        <option value="reading">Reading</option>
+                        <option value="completed">Completed</option>
+                        <option value="tbr">To Be Read</option>
+                        <option value="dnf">Did Not Finish</option>
+                    </select>
+                    <select id="sortBooks" class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                        <option value="dateAdded-desc">Date Added (Newest)</option>
+                        <option value="dateAdded-asc">Date Added (Oldest)</option>
+                        <option value="title-asc">Title (A-Z)</option>
+                        <option value="title-desc">Title (Z-A)</option>
+                        <option value="progress-desc">Progress (Highest)</option>
+                        <option value="progress-asc">Progress (Lowest)</option>
+                    </select>
+                    <button id="addBookBtn" class="bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Book
+                    </button>
+                    <button id="rouletteBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                        Book Roulette
+                    </button>
+                </div>
+            </div>
+
+            <div id="emptyLibrary" class="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-md transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-white">Your library is empty</h3>
+                <p class="mt-1 text-gray-500 dark:text-gray-400">Start building your collection by adding your first book.</p>
+                <button id="emptyLibraryAddBtn" class="mt-4 bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors inline-flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Your First Book
+                </button>
+            </div>
+
+            <div id="booksList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settingsView" class="fade-in hidden">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-6">Settings</h2>
+            
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 transition-colors">
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-white mb-4">Genre Management</h3>
+                <div class="mb-6">
+                    <div class="flex flex-wrap gap-2 mb-3" id="genreTagsContainer"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="newGenreName" placeholder="New genre name" class="flex-grow bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                        <input type="color" id="newGenreColor" value="#5D5CDE" class="h-10 w-10 rounded border border-gray-300 dark:border-gray-600 cursor-pointer">
+                        <button id="addGenreBtn" class="bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Add Genre
+                        </button>
+                    </div>
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-white mb-4">Data Management</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <button id="exportDataBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            Export Data
+                        </button>
+                    </div>
+                    <div>
+                        <button id="importDataBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            Import Data
+                        </button>
+                    </div>
+                </div>
+                <div id="importExportContainer" class="mb-6 hidden">
+                    <textarea id="importExportData" class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm p-3 h-32 font-mono focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="Paste your exported data here..."></textarea>
+                    <div class="flex justify-end mt-2">
+                        <button id="confirmImportBtn" class="bg-green-500 hover:bg-green-600 text-white font-medium py-1 px-3 text-sm rounded-md transition-colors hidden">
+                            Confirm Import
+                        </button>
+                        <button id="closeImportExportBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-1 px-3 text-sm rounded-md transition-colors ml-2">
+                            Close
+                        </button>
+                    </div>
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-700 dark:text-white mb-4">About</h3>
+                <div class="text-gray-600 dark:text-gray-300 text-sm">
+                    <p class="mb-2">BookTrack version 1.0.0</p>
+                    <p class="mb-4">A simple reading tracker for your favorite books.</p>
+                    <div class="flex gap-2">
+                        <a href="https://ko-fi.com/cygryu" target="_blank" class="bg-[#FF5E5B] hover:bg-[#FF5E5B]/90 text-white font-medium py-2 px-4 rounded-md transition-colors inline-flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            Support on Ko-fi
+                        </a>
+                        <a href="https://www.paypal.com/paypalme/sofiansu?country.x=ID&locale.x=en_US" target="_blank" class="bg-[#003087] hover:bg-[#003087]/90 text-white font-medium py-2 px-4 rounded-md transition-colors inline-flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                            </svg>
+                            PayPal
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- Add/Edit Book Modal -->
+    <div id="bookModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto transition-colors mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="modalTitle" class="text-xl font-bold text-gray-800 dark:text-white">Add New Book</h3>
+                    <button id="closeBookModalBtn" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="bookForm" class="space-y-4">
+                    <input type="hidden" id="bookId">
+                    
+                    <div>
+                        <label for="bookTitle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Book Title *</label>
+                        <input type="text" id="bookTitle" required class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label for="bookAuthor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Author *</label>
+                        <input type="text" id="bookAuthor" required class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label for="bookGenre" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Genre *</label>
+                        <select id="bookGenre" required class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="bookTotalPages" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Pages *</label>
+                        <input type="number" id="bookTotalPages" required min="1" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label for="bookStatus" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status *</label>
+                        <select id="bookStatus" required class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                            <option value="tbr">To Be Read</option>
+                            <option value="reading">Currently Reading</option>
+                            <option value="completed">Completed</option>
+                            <option value="dnf">Did Not Finish</option>
+                        </select>
+                    </div>
+                    
+                    <div id="currentPageContainer">
+                        <label for="bookCurrentPage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Page</label>
+                        <input type="number" id="bookCurrentPage" min="0" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                    </div>
+                    
+                    <div id="startDateContainer">
+                        <label for="bookStartDate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                        <input type="date" id="bookStartDate" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                    </div>
+                    
+                    <div id="completionDateContainer" class="hidden">
+                        <label for="bookCompletionDate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Completion Date</label>
+                        <input type="date" id="bookCompletionDate" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label for="bookNotes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+                        <textarea id="bookNotes" rows="3" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" id="cancelBookBtn" class="bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" id="saveBookBtn" class="bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Save Book
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Progress Modal -->
+    <div id="progressModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full transition-colors mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">Update Reading Progress</h3>
+                    <button id="closeProgressModalBtn" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="progressForm" class="space-y-4">
+                    <input type="hidden" id="progressBookId">
+                    
+                    <div>
+                        <h4 id="progressBookTitle" class="font-medium text-gray-800 dark:text-white text-lg mb-4"></h4>
+                        
+                        <div class="mb-4">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-600 dark:text-gray-300">Progress</span>
+                                <span id="progressPercent" class="font-medium">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <label for="currentPage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Page</label>
+                        <div class="flex items-center">
+                            <input type="range" id="pageSlider" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700">
+                        </div>
+                        <div class="flex justify-between mt-1">
+                            <input type="number" id="currentPage" min="0" class="w-20 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                            <span class="text-gray-600 dark:text-gray-300 py-2" id="totalPagesSpan">of 0</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="sessionMinutes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reading Time (minutes)</label>
+                        <input type="number" id="sessionMinutes" min="1" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="Optional">
+                    </div>
+                    
+                    <div>
+                        <label for="sessionNotes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Session Notes</label>
+                        <textarea id="sessionNotes" rows="2" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors" placeholder="Optional"></textarea>
+                    </div>
+                    
+                    <div id="bookCompletedMessage" class="hidden py-3 px-4 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-md">
+                        You've finished this book! Great job! 🎉
+                    </div>
+                    
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" id="cancelProgressBtn" class="bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" id="saveProgressBtn" class="bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Save Progress
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Book Roulette Modal -->
+    <div id="rouletteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full transition-colors mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">Book Roulette</h3>
+                    <button id="closeRouletteModalBtn" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <p class="text-gray-600 dark:text-gray-300">Can't decide what to read next? Let the roulette choose for you!</p>
+                    
+                    <div>
+                        <label for="rouletteGenre" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Genre Filter (Optional)</label>
+                        <select id="rouletteGenre" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
+                            <option value="">Any Genre</option>
+                        </select>
+                    </div>
+                    
+                    <div id="rouletteResult" class="hidden">
+                        <div class="py-4 px-5 bg-gray-100 dark:bg-gray-700 rounded-md">
+                            <h4 id="rouletteBookTitle" class="font-medium text-gray-800 dark:text-white text-lg"></h4>
+                            <p id="rouletteBookAuthor" class="text-gray-600 dark:text-gray-300 text-sm"></p>
+                            <div class="mt-2 flex items-center">
+                                <span id="rouletteBookGenre" class="text-xs py-1 px-2 rounded-full text-white"></span>
+                                <span id="rouletteBookPages" class="text-xs text-gray-500 dark:text-gray-400 ml-2"></span>
+                            </div>
+                        </div>
+                        <div class="flex justify-center mt-3">
+                            <button id="startReadingRouletteBtn" class="bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors">
+                                Start Reading This Book
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="rouletteNoBooks" class="hidden py-3 px-4 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-md">
+                        No books found in your TBR list with the selected criteria.
+                    </div>
+                    
+                    <div class="flex justify-center pt-2">
+                        <button id="spinRouletteBtn" class="bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                            </svg>
+                            Spin the Roulette
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 max-w-xs bg-gray-800 text-white rounded-lg shadow-lg p-4 flex items-center transition-opacity duration-300 opacity-0 pointer-events-none">
+        <svg id="toastIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-gray-800 shadow-md py-4 transition-colors">
+        <div class="container mx-auto px-4 flex flex-col sm:flex-row justify-between items-center">
+            <div class="text-gray-600 dark:text-gray-400 text-sm mb-2 sm:mb-0">
+                Developed by CygRyu
+            </div>
+            <div>
+                <button id="appVersionBtn" class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                    v1.0.0
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize dark mode
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // App state and constants
+        const APP_VERSION = '1.0.0';
+        const STORAGE_KEY = 'bookTrackData';
+        
+        // Default genres with colors
+        const DEFAULT_GENRES = [
+            { id: 'fantasy', name: 'Fantasy', color: '#8B5CF6' },
+            { id: 'scifi', name: 'Sci-Fi', color: '#3B82F6' },
+            { id: 'mystery', name: 'Mystery', color: '#6366F1' },
+            { id: 'horror', name: 'Horror', color: '#DC2626' },
+            { id: 'thriller', name: 'Thriller', color: '#F97316' },
+            { id: 'wuxia', name: 'Wuxia/Xianxia', color: '#059669' },
+            { id: 'romance', name: 'Romance', color: '#EC4899' },
+            { id: 'historical', name: 'Historical', color: '#D97706' },
+            { id: 'nonfiction', name: 'Non-Fiction', color: '#4B5563' }
+        ];
+
+        // Initialize app data
+        let appData = {
+            version: APP_VERSION,
+            books: [],
+            readingSessions: [],
+            genres: [...DEFAULT_GENRES],
+            stats: {
+                longestStreak: 0,
+                currentStreak: 0,
+                lastReadDate: null,
+                recoveryDayUsed: false,
+                totalPagesRead: 0,
+                mostPagesInOneDay: 0,
+                mostActiveReadingDay: null,
+                fastestReadBook: null,
+                longestBook: null
+            },
+            settings: {
+                theme: 'system'
+            }
+        };
+
+        // DOM Elements
+        const dashboardBtn = document.getElementById('dashboardBtn');
+        const libraryBtn = document.getElementById('libraryBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        
+        const dashboardView = document.getElementById('dashboardView');
+        const libraryView = document.getElementById('libraryView');
+        const settingsView = document.getElementById('settingsView');
+        
+        const currentStreak = document.getElementById('currentStreak');
+        const longestStreak = document.getElementById('longestStreak');
+        const readingChain = document.getElementById('readingChain');
+        
+        const currentBookEmpty = document.getElementById('currentBookEmpty');
+        const currentBookCard = document.getElementById('currentBookCard');
+        const currentBookTitle = document.getElementById('currentBookTitle');
+        const currentBookAuthor = document.getElementById('currentBookAuthor');
+        const currentBookProgress = document.getElementById('currentBookProgress');
+        const currentBookProgressBar = document.getElementById('currentBookProgressBar');
+        const pagesRead = document.getElementById('pagesRead');
+        const readingPace = document.getElementById('readingPace');
+        const readingForecast = document.getElementById('readingForecast');
+        
+        const startReadingBtn = document.getElementById('startReadingBtn');
+        const updateProgressBtn = document.getElementById('updateProgressBtn');
+        const just5MoreBtn = document.getElementById('just5MoreBtn');
+        
+        const calendarYear = document.getElementById('calendarYear');
+        const prevYearBtn = document.getElementById('prevYearBtn');
+        const nextYearBtn = document.getElementById('nextYearBtn');
+        const heatMapContainer = document.getElementById('heatMapContainer');
+        
+        const mostPagesDay = document.getElementById('mostPagesDay');
+        const fastestRead = document.getElementById('fastestRead');
+        const longestBook = document.getElementById('longestBook');
+        const mostActiveDay = document.getElementById('mostActiveDay');
+        const totalPagesRead = document.getElementById('totalPagesRead');
+        
+        const readingStatsChart = document.getElementById('readingStatsChart');
+        
+        const emptyBookshelf = document.getElementById('emptyBookshelf');
+        const virtualBookshelf = document.getElementById('virtualBookshelf');
+        
+        const emptyLibrary = document.getElementById('emptyLibrary');
+        const booksList = document.getElementById('booksList');
+        const searchBooks = document.getElementById('searchBooks');
+        const filterGenre = document.getElementById('filterGenre');
+        const filterStatus = document.getElementById('filterStatus');
+        const sortBooks = document.getElementById('sortBooks');
+        const addBookBtn = document.getElementById('addBookBtn');
+        const emptyLibraryAddBtn = document.getElementById('emptyLibraryAddBtn');
+        const rouletteBtn = document.getElementById('rouletteBtn');
+        
+        const bookModal = document.getElementById('bookModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const bookForm = document.getElementById('bookForm');
+        const bookId = document.getElementById('bookId');
+        const bookTitle = document.getElementById('bookTitle');
+        const bookAuthor = document.getElementById('bookAuthor');
+        const bookGenre = document.getElementById('bookGenre');
+        const bookTotalPages = document.getElementById('bookTotalPages');
+        const bookStatus = document.getElementById('bookStatus');
+        const bookCurrentPage = document.getElementById('bookCurrentPage');
+        const currentPageContainer = document.getElementById('currentPageContainer');
+        const bookStartDate = document.getElementById('bookStartDate');
+        const startDateContainer = document.getElementById('startDateContainer');
+        const bookCompletionDate = document.getElementById('bookCompletionDate');
+        const completionDateContainer = document.getElementById('completionDateContainer');
+        const bookNotes = document.getElementById('bookNotes');
+        const closeBookModalBtn = document.getElementById('closeBookModalBtn');
+        const cancelBookBtn = document.getElementById('cancelBookBtn');
+        
+        const progressModal = document.getElementById('progressModal');
+        const progressForm = document.getElementById('progressForm');
+        const progressBookId = document.getElementById('progressBookId');
+        const progressBookTitle = document.getElementById('progressBookTitle');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressBar = document.getElementById('progressBar');
+        const pageSlider = document.getElementById('pageSlider');
+        const currentPage = document.getElementById('currentPage');
+        const totalPagesSpan = document.getElementById('totalPagesSpan');
+        const sessionMinutes = document.getElementById('sessionMinutes');
+        const sessionNotes = document.getElementById('sessionNotes');
+        const bookCompletedMessage = document.getElementById('bookCompletedMessage');
+        const closeProgressModalBtn = document.getElementById('closeProgressModalBtn');
+        const cancelProgressBtn = document.getElementById('cancelProgressBtn');
+        
+        const rouletteModal = document.getElementById('rouletteModal');
+        const rouletteGenre = document.getElementById('rouletteGenre');
+        const rouletteResult = document.getElementById('rouletteResult');
+        const rouletteBookTitle = document.getElementById('rouletteBookTitle');
+        const rouletteBookAuthor = document.getElementById('rouletteBookAuthor');
+        const rouletteBookGenre = document.getElementById('rouletteBookGenre');
+        const rouletteBookPages = document.getElementById('rouletteBookPages');
+        const rouletteNoBooks = document.getElementById('rouletteNoBooks');
+        const spinRouletteBtn = document.getElementById('spinRouletteBtn');
+        const startReadingRouletteBtn = document.getElementById('startReadingRouletteBtn');
+        const closeRouletteModalBtn = document.getElementById('closeRouletteModalBtn');
+        
+        const genreTagsContainer = document.getElementById('genreTagsContainer');
+        const newGenreName = document.getElementById('newGenreName');
+        const newGenreColor = document.getElementById('newGenreColor');
+        const addGenreBtn = document.getElementById('addGenreBtn');
+        
+        const exportDataBtn = document.getElementById('exportDataBtn');
+        const importDataBtn = document.getElementById('importDataBtn');
+        const importExportContainer = document.getElementById('importExportContainer');
+        const importExportData = document.getElementById('importExportData');
+        const confirmImportBtn = document.getElementById('confirmImportBtn');
+        const closeImportExportBtn = document.getElementById('closeImportExportBtn');
+        
+        const toast = document.getElementById('toast');
+        const toastIcon = document.getElementById('toastIcon');
+        const toastMessage = document.getElementById('toastMessage');
+        
+        const appVersionBtn = document.getElementById('appVersionBtn');
+
+        // Chart instances
+        let readingChart = null;
+        let currentYearForHeatMap = new Date().getFullYear();
+
+        // Utility functions
+        function generateId() {
+            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+
+        function formatDate(date) {
+            if (!date) return '';
+            const d = new Date(date);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function formatDisplayDate(date) {
+            if (!date) return '';
+            const d = new Date(date);
+            const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+            return `${month} ${d.getDate()}, ${d.getFullYear()}`;
+        }
+
+        function getDaysBetween(start, end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            return Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+        }
+
+        function todayDateString() {
+            return formatDate(new Date());
+        }
+
+        function showToast(message, type = 'success') {
+            toastMessage.textContent = message;
+            
+            if (type === 'success') {
+                toastIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />';
+                toast.classList.add('bg-gray-800');
+                toast.classList.remove('bg-red-800');
+            } else {
+                toastIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />';
+                toast.classList.add('bg-red-800');
+                toast.classList.remove('bg-gray-800');
+            }
+            
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // Save and load data
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+            } catch (e) {
+                showToast('Error saving data. Check browser storage permissions.', 'error');
+                console.error('Error saving data:', e);
+            }
+        }
+
+        function loadData() {
+            try {
+                const savedData = localStorage.getItem(STORAGE_KEY);
+                if (savedData) {
+                    appData = JSON.parse(savedData);
+                    
+                    // Migration from older versions if needed
+                    if (!appData.version) {
+                        appData.version = APP_VERSION;
+                    }
+                    
+                    // Ensure all required properties exist
+                    if (!appData.stats) {
+                        appData.stats = {
+                            longestStreak: 0,
+                            currentStreak: 0,
+                            lastReadDate: null,
+                            recoveryDayUsed: false,
+                            totalPagesRead: 0,
+                            mostPagesInOneDay: 0,
+                            mostActiveReadingDay: null,
+                            fastestReadBook: null,
+                            longestBook: null
+                        };
+                    }
+                    
+                    if (!appData.settings) {
+                        appData.settings = { theme: 'system' };
+                    }
+                    
+                    if (!appData.genres || appData.genres.length === 0) {
+                        appData.genres = [...DEFAULT_GENRES];
+                    }
+                    
+                    if (!appData.readingSessions) {
+                        appData.readingSessions = [];
+                    }
+                    
+                    // Save migrated data
+                    saveData();
+                }
+            } catch (e) {
+                showToast('Error loading data. Using default settings.', 'error');
+                console.error('Error loading data:', e);
+                // Reset to defaults if data is corrupted
+                appData = {
+                    version: APP_VERSION,
+                    books: [],
+                    readingSessions: [],
+                    genres: [...DEFAULT_GENRES],
+                    stats: {
+                        longestStreak: 0,
+                        currentStreak: 0,
+                        lastReadDate: null,
+                        recoveryDayUsed: false,
+                        totalPagesRead: 0,
+                        mostPagesInOneDay: 0,
+                        mostActiveReadingDay: null,
+                        fastestReadBook: null,
+                        longestBook: null
+                    },
+                    settings: { theme: 'system' }
+                };
+                saveData();
+            }
+        }
+
+        // Export/Import data
+        function exportData() {
+            try {
+                const exportString = Base64.encode(JSON.stringify(appData));
+                importExportData.value = exportString;
+                importExportContainer.classList.remove('hidden');
+                confirmImportBtn.classList.add('hidden');
+                showToast('Data exported. Copy the text below.', 'success');
+            } catch (e) {
+                showToast('Error exporting data.', 'error');
+                console.error('Error exporting data:', e);
+            }
+        }
+
+        function importData() {
+            importExportData.value = '';
+            importExportContainer.classList.remove('hidden');
+            confirmImportBtn.classList.remove('hidden');
+        }
+
+        function confirmImport() {
+            try {
+                const importString = importExportData.value.trim();
+                if (!importString) {
+                    showToast('No data to import.', 'error');
+                    return;
+                }
+                
+                const importedData = JSON.parse(Base64.decode(importString));
+                
+                // Validate imported data
+                if (!importedData || !importedData.books || !Array.isArray(importedData.books)) {
+                    showToast('Invalid data format.', 'error');
+                    return;
+                }
+                
+                // Merge with current app structure to ensure all required fields
+                appData = {
+                    ...appData,
+                    ...importedData,
+                    version: APP_VERSION // Always use current version
+                };
+                
+                saveData();
+                importExportContainer.classList.add('hidden');
+                showToast('Data imported successfully!', 'success');
+                
+                // Refresh UI
+                refreshUI();
+            } catch (e) {
+                showToast('Error importing data. Make sure the format is correct.', 'error');
+                console.error('Error importing data:', e);
+            }
+        }
+
+        // View management
+        function showView(view) {
+            dashboardView.classList.add('hidden');
+            libraryView.classList.add('hidden');
+            settingsView.classList.add('hidden');
+            
+            dashboardBtn.classList.remove('bg-primary', 'text-white');
+            libraryBtn.classList.remove('bg-primary', 'text-white');
+            settingsBtn.classList.remove('bg-primary', 'text-white');
+            
+            dashboardBtn.classList.add('text-gray-700', 'dark:text-gray-200', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+            libraryBtn.classList.add('text-gray-700', 'dark:text-gray-200', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+            settingsBtn.classList.add('text-gray-700', 'dark:text-gray-200', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+            
+            if (view === 'dashboard') {
+                dashboardView.classList.remove('hidden');
+                dashboardBtn.classList.add('bg-primary', 'text-white');
+                dashboardBtn.classList.remove('text-gray-700', 'dark:text-gray-200', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                refreshDashboard();
+            } else if (view === 'library') {
+                libraryView.classList.remove('hidden');
+                libraryBtn.classList.add('bg-primary', 'text-white');
+                libraryBtn.classList.remove('text-gray-700', 'dark:text-gray-200', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                refreshLibrary();
+            } else if (view === 'settings') {
+                settingsView.classList.remove('hidden');
+                settingsBtn.classList.add('bg-primary', 'text-white');
+                settingsBtn.classList.remove('text-gray-700', 'dark:text-gray-200', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                refreshSettings();
+            }
+        }
+
+        // Dashboard functions
+        function refreshDashboard() {
+            refreshStreakCounter();
+            refreshReadingChain();
+            refreshCurrentBook();
+            refreshHeatMap(currentYearForHeatMap);
+            refreshRecords();
+            refreshReadingStats();
+            refreshVirtualBookshelf();
+        }
+
+        function refreshStreakCounter() {
+            currentStreak.textContent = appData.stats.currentStreak;
+            longestStreak.textContent = `${appData.stats.longestStreak} days`;
+        }
+
+        function refreshReadingChain() {
+            readingChain.innerHTML = '';
+            
+            // Get the last 30 days
+            const today = new Date();
+            const chain = [];
+            
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i);
+                const dateStr = formatDate(date);
+                
+                const hasRead = appData.readingSessions.some(session => formatDate(session.date) === dateStr);
+                chain.push(hasRead);
+            }
+            
+            chain.forEach((read, index) => {
+                const div = document.createElement('div');
+                div.className = 'chain-link';
+                if (read) {
+                    div.classList.add('bg-primary');
+                } else {
+                    div.classList.add('bg-gray-300', 'dark:bg-gray-700');
+                }
+                
+                // Add tooltip for date
+                const date = new Date(today);
+                date.setDate(today.getDate() - (29 - index));
+                div.title = formatDisplayDate(date);
+                
+                readingChain.appendChild(div);
+            });
+        }
+
+        function refreshCurrentBook() {
+            const currentlyReading = appData.books.filter(book => book.status === 'reading');
+            
+            if (currentlyReading.length === 0) {
+                currentBookEmpty.classList.remove('hidden');
+                currentBookCard.classList.add('hidden');
+                return;
+            }
+            
+            // Sort by last updated
+            currentlyReading.sort((a, b) => {
+                const lastSessionA = getLastReadingSession(a.id);
+                const lastSessionB = getLastReadingSession(b.id);
+                
+                if (!lastSessionA && !lastSessionB) return 0;
+                if (!lastSessionA) return 1;
+                if (!lastSessionB) return -1;
+                
+                return new Date(lastSessionB.date) - new Date(lastSessionA.date);
+            });
+            
+            const book = currentlyReading[0];
+            
+            currentBookEmpty.classList.add('hidden');
+            currentBookCard.classList.remove('hidden');
+            
+            currentBookTitle.textContent = book.title;
+            currentBookAuthor.textContent = book.author;
+            
+            const progress = Math.round((book.currentPage / book.totalPages) * 100);
+            currentBookProgress.textContent = `${progress}%`;
+            currentBookProgressBar.style.width = `${progress}%`;
+            
+            pagesRead.textContent = `${book.currentPage} / ${book.totalPages}`;
+            
+            // Calculate reading pace
+            const pace = calculateReadingPace(book);
+            readingPace.textContent = pace ? `${pace} pages/day` : 'N/A';
+            
+            // Reading forecast
+            if (pace && pace > 0) {
+                const pagesLeft = book.totalPages - book.currentPage;
+                const daysLeft = Math.ceil(pagesLeft / pace);
+                
+                const finishDate = new Date();
+                finishDate.setDate(finishDate.getDate() + daysLeft);
+                
+                readingForecast.textContent = `At your current pace, you'll finish by ${formatDisplayDate(finishDate)}`;
+            } else {
+                readingForecast.textContent = 'At your current pace, finish date is unknown';
+            }
+        }
+
+        function refreshHeatMap(year) {
+            calendarYear.textContent = year;
+            heatMapContainer.innerHTML = '';
+            
+            const DateTime = luxon.DateTime;
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            // Group sessions by date
+            const sessionsByDate = {};
+            appData.readingSessions.forEach(session => {
+                const date = formatDate(session.date);
+                if (new Date(date).getFullYear() === year) {
+                    if (!sessionsByDate[date]) {
+                        sessionsByDate[date] = { pages: 0, minutes: 0 };
+                    }
+                    sessionsByDate[date].pages += (session.pagesRead || 0);
+                    sessionsByDate[date].minutes += (session.minutes || 0);
+                }
+            });
+            
+            // Find max pages read in a day for scaling
+            let maxPages = 0;
+            Object.values(sessionsByDate).forEach(day => {
+                if (day.pages > maxPages) maxPages = day.pages;
+            });
+            if (maxPages === 0) maxPages = 1; // Avoid division by zero
+            
+            // Create month labels
+            const monthLabelsDiv = document.createElement('div');
+            monthLabelsDiv.className = 'flex mb-1';
+            monthLabelsDiv.innerHTML = '<div style="width: 20px;"></div>'; // Spacer for day labels
+            
+            monthNames.forEach(month => {
+                const monthLabel = document.createElement('div');
+                monthLabel.className = 'text-xs text-gray-500 dark:text-gray-400 flex-grow text-center';
+                monthLabel.textContent = month;
+                monthLabelsDiv.appendChild(monthLabel);
+            });
+            
+            heatMapContainer.appendChild(monthLabelsDiv);
+            
+            // Create container for days and cells
+            const calendarGrid = document.createElement('div');
+            calendarGrid.className = 'flex';
+            
+            // Day labels (0-6: Sun-Sat)
+            const dayLabelsDiv = document.createElement('div');
+            dayLabelsDiv.className = 'flex flex-col mr-1';
+            dayLabelsDiv.style.width = '20px';
+            
+            const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+            dayNames.forEach(day => {
+                const dayLabel = document.createElement('div');
+                dayLabel.className = 'text-xs text-gray-500 dark:text-gray-400 h-[14px] flex items-center justify-center';
+                dayLabel.textContent = day;
+                dayLabelsDiv.appendChild(dayLabel);
+            });
+            
+            calendarGrid.appendChild(dayLabelsDiv);
+            
+            // Loop through each month
+            for (let month = 0; month < 12; month++) {
+                const monthContainer = document.createElement('div');
+                monthContainer.className = 'flex flex-col flex-grow';
+                
+                // Determine first day of month (0-6: Sun-Sat)
+                const firstDay = DateTime.local(year, month + 1, 1).weekday % 7;
+                
+                // Determine number of days in month
+                const daysInMonth = DateTime.local(year, month + 1).daysInMonth;
+                
+                // Create cells for each day
+                const cells = [];
+                
+                // Add empty cells for days before the 1st of the month
+                for (let i = 0; i < firstDay; i++) {
+                    cells.push(null);
+                }
+                
+                // Add cells for each day of the month
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const dayData = sessionsByDate[date];
+                    
+                    let intensity = 0;
+                    if (dayData) {
+                        intensity = Math.min(1, dayData.pages / maxPages);
+                    }
+                    
+                    cells.push({
+                        date,
+                        intensity,
+                        tooltip: dayData ? `${formatDisplayDate(date)}: ${dayData.pages} pages read` : `${formatDisplayDate(date)}: No reading`
+                    });
+                }
+                
+                // Group cells into weeks (rows)
+                while (cells.length > 0) {
+                    const weekCells = cells.splice(0, 7);
+                    
+                    // Create week container
+                    const weekContainer = document.createElement('div');
+                    weekContainer.className = 'flex';
+                    
+                    // Add cells to week
+                    weekCells.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = 'heat-map-cell';
+                        
+                        if (cell) {
+                            const opacity = cell.intensity;
+                            cellDiv.style.backgroundColor = `rgba(93, 92, 222, ${opacity})`;
+                            cellDiv.title = cell.tooltip;
+                            
+                            // For dark mode, add a lower bound on opacity to ensure visibility
+                            cellDiv.style.opacity = Math.max(0.15, opacity);
+                            
+                            // If no reading, use gray background
+                            if (opacity === 0) {
+                                cellDiv.classList.add('bg-gray-200', 'dark:bg-gray-700');
+                                cellDiv.style.backgroundColor = '';
+                            }
+                        } else {
+                            cellDiv.style.visibility = 'hidden';
+                        }
+                        
+                        weekContainer.appendChild(cellDiv);
+                    });
+                    
+                    monthContainer.appendChild(weekContainer);
+                }
+                
+                calendarGrid.appendChild(monthContainer);
+            }
+            
+            heatMapContainer.appendChild(calendarGrid);
+        }
+
+        function refreshRecords() {
+            mostPagesDay.textContent = appData.stats.mostPagesInOneDay > 0 ? 
+                `${appData.stats.mostPagesInOneDay} pages` : 'None yet';
+            
+            if (appData.stats.fastestReadBook) {
+                const book = appData.books.find(b => b.id === appData.stats.fastestReadBook);
+                if (book && book.startDate && book.completionDate) {
+                    const days = getDaysBetween(book.startDate, book.completionDate);
+                    fastestRead.textContent = `${book.title} (${days} days)`;
+                } else {
+                    fastestRead.textContent = 'None yet';
+                }
+            } else {
+                fastestRead.textContent = 'None yet';
+            }
+            
+            if (appData.stats.longestBook) {
+                const book = appData.books.find(b => b.id === appData.stats.longestBook);
+                if (book) {
+                    longestBook.textContent = `${book.title} (${book.totalPages} pages)`;
+                } else {
+                    longestBook.textContent = 'None yet';
+                }
+            } else {
+                longestBook.textContent = 'None yet';
+            }
+            
+            if (appData.stats.mostActiveReadingDay) {
+                mostActiveDay.textContent = formatDisplayDate(appData.stats.mostActiveReadingDay);
+            } else {
+                mostActiveDay.textContent = 'None yet';
+            }
+            
+            totalPagesRead.textContent = `${appData.stats.totalPagesRead} pages`;
+        }
+
+        function refreshReadingStats() {
+            if (readingChart) {
+                readingChart.destroy();
+            }
+            
+            // Group reading by month for the current year
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const pagesByMonth = Array(12).fill(0);
+            const currentYear = new Date().getFullYear();
+            
+            appData.readingSessions.forEach(session => {
+                const date = new Date(session.date);
+                if (date.getFullYear() === currentYear) {
+                    pagesByMonth[date.getMonth()] += (session.pagesRead || 0);
+                }
+            });
+            
+            // Create chart
+            const ctx = readingStatsChart.getContext('2d');
+            readingChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Pages Read',
+                        data: pagesByMonth,
+                        backgroundColor: '#5D5CDE',
+                        borderWidth: 0,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#4b5563'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#4b5563'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.raw} pages`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function refreshVirtualBookshelf() {
+            const completedBooks = appData.books.filter(book => book.status === 'completed');
+            
+            if (completedBooks.length === 0) {
+                emptyBookshelf.classList.remove('hidden');
+                virtualBookshelf.classList.add('hidden');
+                return;
+            }
+            
+            emptyBookshelf.classList.add('hidden');
+            virtualBookshelf.classList.remove('hidden');
+            virtualBookshelf.innerHTML = '';
+            
+            // Sort by completion date (newest first)
+            completedBooks.sort((a, b) => {
+                if (!a.completionDate) return 1;
+                if (!b.completionDate) return -1;
+                return new Date(b.completionDate) - new Date(a.completionDate);
+            });
+            
+            completedBooks.forEach(book => {
+                const genre = appData.genres.find(g => g.id === book.genre);
+                
+                const bookSpine = document.createElement('div');
+                bookSpine.className = 'book-spine text-white';
+                bookSpine.style.backgroundColor = genre ? genre.color : '#5D5CDE';
+                bookSpine.style.width = `${Math.max(15, Math.min(30, book.totalPages / 20))}px`;
+                bookSpine.title = `${book.title} by ${book.author}`;
+                bookSpine.textContent = book.title;
+                bookSpine.dataset.id = book.id;
+                
+                bookSpine.addEventListener('click', () => {
+                    openBookDetails(book.id);
+                });
+                
+                virtualBookshelf.appendChild(bookSpine);
+            });
+        }
+
+        // Library functions
+        function refreshLibrary() {
+            populateGenreFilter();
+            renderLibrary();
+        }
+
+        function populateGenreFilter() {
+            filterGenre.innerHTML = '<option value="">All Genres</option>';
+            rouletteGenre.innerHTML = '<option value="">Any Genre</option>';
+            
+            appData.genres.forEach(genre => {
+                const option = document.createElement('option');
+                option.value = genre.id;
+                option.textContent = genre.name;
+                filterGenre.appendChild(option);
+                
+                const rouletteOption = document.createElement('option');
+                rouletteOption.value = genre.id;
+                rouletteOption.textContent = genre.name;
+                rouletteGenre.appendChild(rouletteOption);
+            });
+        }
+
+        function renderLibrary() {
+            const searchTerm = searchBooks.value.toLowerCase();
+            const genreFilter = filterGenre.value;
+            const statusFilter = filterStatus.value;
+            const sortOption = sortBooks.value;
+            
+            // Filter books
+            let filteredBooks = [...appData.books];
+            
+            if (searchTerm) {
+                filteredBooks = filteredBooks.filter(book => 
+                    book.title.toLowerCase().includes(searchTerm) || 
+                    book.author.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (genreFilter) {
+                filteredBooks = filteredBooks.filter(book => book.genre === genreFilter);
+            }
+            
+            if (statusFilter) {
+                filteredBooks = filteredBooks.filter(book => book.status === statusFilter);
+            }
+            
+            // Sort books
+            const [sortField, sortDirection] = sortOption.split('-');
+            
+            filteredBooks.sort((a, b) => {
+                if (sortField === 'dateAdded') {
+                    const dateA = new Date(a.dateAdded || 0);
+                    const dateB = new Date(b.dateAdded || 0);
+                    return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+                }
+                
+                if (sortField === 'title') {
+                    return sortDirection === 'asc' ? 
+                        a.title.localeCompare(b.title) : 
+                        b.title.localeCompare(a.title);
+                }
+                
+                if (sortField === 'progress') {
+                    const progressA = (a.currentPage / a.totalPages) || 0;
+                    const progressB = (b.currentPage / b.totalPages) || 0;
+                    return sortDirection === 'asc' ? progressA - progressB : progressB - progressA;
+                }
+                
+                return 0;
+            });
+            
+            // Show empty library message if no books
+            if (appData.books.length === 0) {
+                emptyLibrary.classList.remove('hidden');
+                booksList.classList.add('hidden');
+            } else {
+                emptyLibrary.classList.add('hidden');
+                booksList.classList.remove('hidden');
+                
+                // Show no results message if filtered books are empty
+                if (filteredBooks.length === 0) {
+                    booksList.innerHTML = `
+                        <div class="col-span-full text-center py-8 bg-white dark:bg-gray-800 rounded-lg shadow-md transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-white">No books found</h3>
+                            <p class="mt-1 text-gray-500 dark:text-gray-400">Try adjusting your search or filter criteria.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Render books
+                booksList.innerHTML = '';
+                
+                filteredBooks.forEach(book => {
+                    const genre = appData.genres.find(g => g.id === book.genre);
+                    const genreColor = genre ? genre.color : '#5D5CDE';
+                    
+                    const progress = Math.round((book.currentPage / book.totalPages) * 100);
+                    
+                    const card = document.createElement('div');
+                    card.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-colors';
+                    
+                    // Status indicator at the top of the card
+                    let statusText = '';
+                    let statusBg = '';
+                    switch(book.status) {
+                        case 'reading':
+                            statusText = 'Currently Reading';
+                            statusBg = 'bg-blue-500';
+                            break;
+                        case 'completed':
+                            statusText = 'Completed';
+                            statusBg = 'bg-green-500';
+                            break;
+                        case 'tbr':
+                            statusText = 'To Be Read';
+                            statusBg = 'bg-yellow-500';
+                            break;
+                        case 'dnf':
+                            statusText = 'Did Not Finish';
+                            statusBg = 'bg-red-500';
+                            break;
+                    }
+                    
+                    const lastSession = getLastReadingSession(book.id);
+                    const lastReadDate = lastSession ? formatDisplayDate(lastSession.date) : 'Never';
+                    
+                    card.innerHTML = `
+                        <div class="${statusBg} text-white py-1 px-3 text-xs font-medium">
+                            ${statusText}
+                        </div>
+                        <div class="p-4">
+                            <h3 class="font-medium text-gray-800 dark:text-white text-lg mb-1 line-clamp-1">${book.title}</h3>
+                            <p class="text-gray-600 dark:text-gray-300 text-sm mb-3">${book.author}</p>
+                            
+                            ${book.status !== 'tbr' ? `
+                                <div class="mb-3">
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-gray-600 dark:text-gray-300">Progress</span>
+                                        <span class="font-medium">${progress}%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                        <div class="bg-primary h-2.5 rounded-full" style="width: ${progress}%"></div>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="flex items-center gap-2 mb-3">
+                                <span class="text-xs py-1 px-2 rounded-full text-white" style="background-color: ${genreColor}">
+                                    ${genre ? genre.name : 'Unknown'}
+                                </span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">${book.totalPages} pages</span>
+                            </div>
+                            
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                Last read: ${lastReadDate}
+                            </div>
+                            
+                            <div class="flex space-x-2">
+        ${book.status === 'reading' ? `
+            <button data-id="${book.id}" class="update-progress-btn flex-grow px-3 py-1 bg-primary text-white text-sm rounded-md hover:bg-primary-dark transition-colors">
+                Update Progress
+            </button>
+        ` : book.status === 'tbr' ? `
+            <button data-id="${book.id}" class="start-reading-btn flex-grow px-3 py-1 bg-green-500 text-white text-sm rounded-md hover:bg-green-600 transition-colors">
+                Start Reading
+            </button>
+        ` : ''}
+        <button data-id="${book.id}" class="edit-book-btn px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white text-sm rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+            Edit
+        </button>
+        <button data-id="${book.id}" class="delete-book-btn px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition-colors">
+            Delete
+        </button>
+    </div>
+                        </div>
+                    `;
+                    
+                    booksList.appendChild(card);
+                });
+                
+                // Add event listeners
+                document.querySelectorAll('.update-progress-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        openProgressModal(button.dataset.id);
+                    });
+                });
+                
+                document.querySelectorAll('.start-reading-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        startReading(button.dataset.id);
+                    });
+                });
+                
+                document.querySelectorAll('.edit-book-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        openBookModal(button.dataset.id);
+                    });
+                });
+
+		document.querySelectorAll('.delete-book-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        deleteBook(button.dataset.id);
+    });
+});
+            }
+        }
+
+        // Settings functions
+        function refreshSettings() {
+            refreshGenreTags();
+        }
+
+        function refreshGenreTags() {
+            genreTagsContainer.innerHTML = '';
+            
+            appData.genres.forEach(genre => {
+                const tag = document.createElement('div');
+                tag.className = 'inline-flex items-center text-sm rounded-full py-1 pl-3 pr-1 text-white';
+                tag.style.backgroundColor = genre.color;
+                
+                tag.innerHTML = `
+                    <span>${genre.name}</span>
+                    <button data-id="${genre.id}" class="delete-genre-btn ml-1 p-1 hover:bg-white/20 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                `;
+                
+                genreTagsContainer.appendChild(tag);
+            });
+            
+            // Add event listeners
+            document.querySelectorAll('.delete-genre-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    deleteGenre(button.dataset.id);
+                });
+            });
+        }
+
+        function deleteGenre(genreId) {
+            // Check if any books use this genre
+            const booksWithGenre = appData.books.filter(book => book.genre === genreId);
+            
+            if (booksWithGenre.length > 0) {
+                showToast(`Cannot delete genre: Used by ${booksWithGenre.length} books.`, 'error');
+                return;
+            }
+            
+            // Remove genre
+            appData.genres = appData.genres.filter(genre => genre.id !== genreId);
+            saveData();
+            
+            // Refresh UI
+            refreshSettings();
+            populateGenreDropdowns();
+            showToast('Genre deleted successfully.', 'success');
+        }
+
+        function addGenre() {
+            const name = newGenreName.value.trim();
+            const color = newGenreColor.value;
+            
+            if (!name) {
+                showToast('Please enter a genre name.', 'error');
+                return;
+            }
+            
+            // Check for duplicates
+            if (appData.genres.some(genre => genre.name.toLowerCase() === name.toLowerCase())) {
+                showToast('A genre with this name already exists.', 'error');
+                return;
+            }
+            
+            // Generate ID from name
+            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            
+            // Add genre
+            appData.genres.push({
+                id,
+                name,
+                color
+            });
+            
+            saveData();
+            
+            // Refresh UI
+            newGenreName.value = '';
+            refreshSettings();
+            populateGenreDropdowns();
+            showToast('Genre added successfully.', 'success');
+        }
+
+        function populateGenreDropdowns() {
+            // Book modal dropdown
+            bookGenre.innerHTML = '';
+            appData.genres.forEach(genre => {
+                const option = document.createElement('option');
+                option.value = genre.id;
+                option.textContent = genre.name;
+                bookGenre.appendChild(option);
+            });
+            
+            // Library filter dropdown
+            populateGenreFilter();
+        }
+
+        // Book management
+        function openBookModal(id = null) {
+            // Reset form
+            bookForm.reset();
+            bookId.value = '';
+            modalTitle.textContent = 'Add New Book';
+            
+            // Show/hide fields based on status
+            bookStatus.value = 'tbr';
+            currentPageContainer.classList.add('hidden');
+            startDateContainer.classList.add('hidden');
+            completionDateContainer.classList.add('hidden');
+            
+            if (id) {
+                const book = appData.books.find(book => book.id === id);
+                if (book) {
+                    bookId.value = book.id;
+                    bookTitle.value = book.title;
+                    bookAuthor.value = book.author;
+                    bookGenre.value = book.genre;
+                    bookTotalPages.value = book.totalPages;
+                    bookStatus.value = book.status;
+                    bookCurrentPage.value = book.currentPage || 0;
+                    bookStartDate.value = book.startDate ? formatDate(book.startDate) : '';
+                    bookCompletionDate.value = book.completionDate ? formatDate(book.completionDate) : '';
+                    bookNotes.value = book.notes || '';
+                    
+                    modalTitle.textContent = 'Edit Book';
+                    
+                    // Show/hide fields based on status
+                    if (book.status === 'reading' || book.status === 'completed' || book.status === 'dnf') {
+                        currentPageContainer.classList.remove('hidden');
+                        startDateContainer.classList.remove('hidden');
+                        
+                        if (book.status === 'completed' || book.status === 'dnf') {
+                            completionDateContainer.classList.remove('hidden');
+                        }
+                    }
+                }
+            }
+            
+            bookModal.classList.remove('hidden');
+        }
+
+        function closeBookModal() {
+            bookModal.classList.add('hidden');
+        }
+
+        function saveBook(e) {
+            e.preventDefault();
+            
+            const id = bookId.value || generateId();
+            const title = bookTitle.value.trim();
+            const author = bookAuthor.value.trim();
+            const genre = bookGenre.value;
+            const totalPages = parseInt(bookTotalPages.value, 10);
+            const status = bookStatus.value;
+            const currentPage = parseInt(bookCurrentPage.value, 10) || 0;
+            const startDate = bookStartDate.value ? new Date(bookStartDate.value) : null;
+            const completionDate = bookCompletionDate.value ? new Date(bookCompletionDate.value) : null;
+            const notes = bookNotes.value.trim();
+            
+            if (!title || !author || !genre || isNaN(totalPages) || totalPages <= 0) {
+                showToast('Please fill out all required fields.', 'error');
+                return;
+            }
+            
+            // Validate current page
+            if (currentPage > totalPages) {
+                showToast('Current page cannot be greater than total pages.', 'error');
+                return;
+            }
+            
+            // Check if this is a new book
+            const isNewBook = !appData.books.some(book => book.id === id);
+            
+            // If a book is already being read and this is a new book marked as reading
+            if (isNewBook && status === 'reading') {
+                const currentlyReading = appData.books.filter(book => book.status === 'reading');
+                // Optionally warn if already reading multiple books
+                if (currentlyReading.length >= 2) {
+                    showToast(`You are already reading ${currentlyReading.length} books.`, 'success');
+                }
+            }
+            
+            // Create or update book
+            const book = {
+                id,
+                title,
+                author,
+                genre,
+                totalPages,
+                status,
+                currentPage,
+                startDate: startDate ? startDate.toISOString() : null,
+                completionDate: completionDate ? completionDate.toISOString() : null,
+                notes,
+                dateAdded: isNewBook ? new Date().toISOString() : appData.books.find(b => b.id === id).dateAdded
+            };
+            
+            // If status is completed and current page is not the total pages, adjust it
+            if (status === 'completed' && currentPage !== totalPages) {
+                book.currentPage = totalPages;
+            }
+            
+            // Special case: If transitioning from TBR to Reading, add start date if not set
+            const existingBook = appData.books.find(b => b.id === id);
+            if (existingBook && existingBook.status === 'tbr' && status === 'reading' && !startDate) {
+                book.startDate = new Date().toISOString();
+            }
+            
+            // Update or add book
+            if (isNewBook) {
+                appData.books.push(book);
+            } else {
+                const index = appData.books.findIndex(b => b.id === id);
+                if (index !== -1) {
+                    appData.books[index] = book;
+                }
+            }
+            
+            saveData();
+            closeBookModal();
+            refreshUI();
+            
+            showToast(isNewBook ? 'Book added successfully.' : 'Book updated successfully.', 'success');
+        }
+
+        function startReading(id) {
+            const book = appData.books.find(book => book.id === id);
+            if (!book) return;
+            
+            // Update book status
+            book.status = 'reading';
+            book.startDate = new Date().toISOString();
+            book.currentPage = 0;
+            
+            saveData();
+            refreshUI();
+            showToast(`Started reading "${book.title}".`, 'success');
+        }
+
+function deleteBook(id) {
+    const book = appData.books.find(book => book.id === id);
+    if (!book) return;
+    
+    if (!confirm(`Are you sure you want to delete "${book.title}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    // Remove the book
+    appData.books = appData.books.filter(b => b.id !== id);
+    
+    // Remove all reading sessions for this book
+    appData.readingSessions = appData.readingSessions.filter(s => s.bookId !== id);
+    
+    // Reset some stats if needed
+    if (appData.stats.fastestReadBook === id) {
+        appData.stats.fastestReadBook = null;
+    }
+    
+    if (appData.stats.longestBook === id) {
+        // Find new longest book
+        const longestBook = appData.books.reduce((longest, book) => 
+            !longest || book.totalPages > longest.totalPages ? book : longest, null);
+            
+        appData.stats.longestBook = longestBook ? longestBook.id : null;
+    }
+    
+    saveData();
+    refreshUI();
+    showToast('Book deleted successfully.', 'success');
+}
+
+        function openProgressModal(id) {
+            const book = appData.books.find(book => book.id === id);
+            if (!book) return;
+            
+            progressBookId.value = book.id;
+            progressBookTitle.textContent = book.title;
+            
+            // Set up slider range
+            pageSlider.min = 0;
+            pageSlider.max = book.totalPages;
+            pageSlider.value = book.currentPage;
+            
+            // Set up current page input
+            currentPage.min = 0;
+            currentPage.max = book.totalPages;
+            currentPage.value = book.currentPage;
+            
+            // Total pages text
+            totalPagesSpan.textContent = `of ${book.totalPages}`;
+            
+            // Update progress display
+            updateProgressDisplay(book.currentPage, book.totalPages);
+            
+            // Reset other fields
+            sessionMinutes.value = '';
+            sessionNotes.value = '';
+            bookCompletedMessage.classList.add('hidden');
+            
+            progressModal.classList.remove('hidden');
+        }
+
+        function closeProgressModal() {
+            progressModal.classList.add('hidden');
+        }
+
+        function updateProgressDisplay(current, total) {
+            const percent = Math.round((current / total) * 100);
+            progressPercent.textContent = `${percent}%`;
+            progressBar.style.width = `${percent}%`;
+            
+            if (current >= total) {
+                bookCompletedMessage.classList.remove('hidden');
+            } else {
+                bookCompletedMessage.classList.add('hidden');
+            }
+        }
+
+        function saveProgress(e) {
+            e.preventDefault();
+            
+            const id = progressBookId.value;
+            const pages = parseInt(currentPage.value, 10);
+            const minutes = parseInt(sessionMinutes.value, 10) || 0;
+            const notes = sessionNotes.value.trim();
+            
+            const book = appData.books.find(book => book.id === id);
+            if (!book) return;
+            
+            // Calculate pages read in this session
+            const pagesRead = pages - book.currentPage;
+            
+            if (pagesRead < 0) {
+                showToast('Current page cannot be less than previous progress.', 'error');
+                return;
+            }
+            
+            if (pages > book.totalPages) {
+                showToast('Current page cannot be greater than total pages.', 'error');
+                return;
+            }
+            
+            // Update book progress
+            const oldStatus = book.status;
+            book.currentPage = pages;
+            
+            // If reaching the end of the book, mark as completed
+            if (pages >= book.totalPages) {
+                book.status = 'completed';
+                book.currentPage = book.totalPages; // Ensure it's exactly at total
+                book.completionDate = new Date().toISOString();
+                
+                // Update stats for fastest read if applicable
+                if (book.startDate) {
+                    const days = getDaysBetween(book.startDate, book.completionDate);
+                    
+                    if (!appData.stats.fastestReadBook) {
+                        appData.stats.fastestReadBook = book.id;
+                    } else {
+                        const fastestBook = appData.books.find(b => b.id === appData.stats.fastestReadBook);
+                        if (fastestBook && fastestBook.startDate && fastestBook.completionDate) {
+                            const fastestDays = getDaysBetween(fastestBook.startDate, fastestBook.completionDate);
+                            
+                            if (days < fastestDays) {
+                                appData.stats.fastestReadBook = book.id;
+                            }
+                        }
+                    }
+                }
+                
+                // Update longest book stat if applicable
+                if (!appData.stats.longestBook || 
+                    book.totalPages > appData.books.find(b => b.id === appData.stats.longestBook)?.totalPages) {
+                    appData.stats.longestBook = book.id;
+                }
+            }
+            
+            // Record reading session if pages were read
+            if (pagesRead > 0) {
+                const session = {
+                    id: generateId(),
+                    bookId: id,
+                    date: new Date().toISOString(),
+                    pagesRead,
+                    minutes,
+                    notes
+                };
+                
+                appData.readingSessions.push(session);
+                
+                // Update streak information
+                updateReadingStreak();
+                
+                // Update total pages read
+                appData.stats.totalPagesRead += pagesRead;
+                
+                // Check for most pages read in a day
+                const todaySessions = appData.readingSessions.filter(s => 
+                    formatDate(s.date) === todayDateString()
+                );
+                
+                const todayPages = todaySessions.reduce((total, s) => total + (s.pagesRead || 0), 0);
+                
+                if (todayPages > appData.stats.mostPagesInOneDay) {
+                    appData.stats.mostPagesInOneDay = todayPages;
+                    appData.stats.mostActiveReadingDay = new Date().toISOString();
+                }
+            }
+            
+            saveData();
+            closeProgressModal();
+            refreshUI();
+            
+            if (oldStatus !== 'completed' && book.status === 'completed') {
+                showToast(`Congratulations! You've finished "${book.title}"!`, 'success');
+            } else {
+                showToast('Progress updated successfully.', 'success');
+            }
+        }
+
+        function just5MorePages() {
+            const currentlyReading = appData.books.find(book => book.status === 'reading');
+            if (!currentlyReading) {
+                showToast('No book currently being read.', 'error');
+                return;
+            }
+            
+            const newPage = Math.min(currentlyReading.currentPage + 5, currentlyReading.totalPages);
+            const pagesRead = newPage - currentlyReading.currentPage;
+            
+            if (pagesRead <= 0) {
+                showToast('You\'ve already finished this book!', 'success');
+                return;
+            }
+            
+            // Update book progress
+            const oldStatus = currentlyReading.status;
+            currentlyReading.currentPage = newPage;
+            
+            // If reaching the end of the book, mark as completed
+            if (newPage >= currentlyReading.totalPages) {
+                currentlyReading.status = 'completed';
+                currentlyReading.currentPage = currentlyReading.totalPages;
+                currentlyReading.completionDate = new Date().toISOString();
+            }
+            
+            // Record reading session
+            const session = {
+                id: generateId(),
+                bookId: currentlyReading.id,
+                date: new Date().toISOString(),
+                pagesRead,
+                minutes: 5, // Assume 5 minutes for 5 pages
+                notes: "Quick +5 pages reading session"
+            };
+            
+            appData.readingSessions.push(session);
+            
+            // Update streak information
+            updateReadingStreak();
+            
+            // Update total pages read
+            appData.stats.totalPagesRead += pagesRead;
+            
+            saveData();
+            refreshUI();
+            
+            if (oldStatus !== 'completed' && currentlyReading.status === 'completed') {
+                showToast(`Congratulations! You've finished "${currentlyReading.title}"!`, 'success');
+            } else {
+                showToast(`Progress updated: +${pagesRead} pages.`, 'success');
+            }
+        }
+
+        function openRouletteModal() {
+            // Reset the roulette
+            rouletteResult.classList.add('hidden');
+            rouletteNoBooks.classList.add('hidden');
+            rouletteGenre.value = '';
+            
+            rouletteModal.classList.remove('hidden');
+        }
+
+        function closeRouletteModal() {
+            rouletteModal.classList.add('hidden');
+        }
+
+        function spinRoulette() {
+            const genre = rouletteGenre.value;
+            
+            // Get all TBR books
+            let eligibleBooks = appData.books.filter(book => book.status === 'tbr');
+            
+            // Apply genre filter if selected
+            if (genre) {
+                eligibleBooks = eligibleBooks.filter(book => book.genre === genre);
+            }
+            
+            if (eligibleBooks.length === 0) {
+                rouletteResult.classList.add('hidden');
+                rouletteNoBooks.classList.remove('hidden');
+                return;
+            }
+            
+            // Select a random book
+            const randomIndex = Math.floor(Math.random() * eligibleBooks.length);
+            const selectedBook = eligibleBooks[randomIndex];
+            
+            // Get genre info
+            const bookGenre = appData.genres.find(g => g.id === selectedBook.genre);
+            
+            // Display result
+            rouletteBookTitle.textContent = selectedBook.title;
+            rouletteBookAuthor.textContent = selectedBook.author;
+            rouletteBookGenre.textContent = bookGenre ? bookGenre.name : 'Unknown';
+            rouletteBookGenre.style.backgroundColor = bookGenre ? bookGenre.color : '#5D5CDE';
+            rouletteBookPages.textContent = `${selectedBook.totalPages} pages`;
+            
+            // Store selected book ID for the start reading button
+            startReadingRouletteBtn.dataset.id = selectedBook.id;
+            
+            rouletteNoBooks.classList.add('hidden');
+            rouletteResult.classList.remove('hidden');
+        }
+
+        function getLastReadingSession(bookId) {
+            const sessions = appData.readingSessions
+                .filter(session => session.bookId === bookId)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            return sessions.length > 0 ? sessions[0] : null;
+        }
+
+        function calculateReadingPace(book) {
+            if (!book.startDate || book.currentPage === 0) return null;
+            
+            // Get all reading sessions for this book
+            const sessions = appData.readingSessions
+                .filter(session => session.bookId === book.id)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            if (sessions.length === 0) return null;
+            
+            // Calculate days between first session and latest session
+            const firstSessionDate = new Date(sessions[0].date);
+            const lastSessionDate = new Date(sessions[sessions.length - 1].date);
+            
+            // If only one day of reading, return pages read
+            if (formatDate(firstSessionDate) === formatDate(lastSessionDate)) {
+                return book.currentPage;
+            }
+            
+            const daysDiff = Math.max(1, getDaysBetween(firstSessionDate, lastSessionDate));
+            return Math.round(book.currentPage / daysDiff);
+        }
+
+        function updateReadingStreak() {
+            const today = todayDateString();
+            
+            // If we already read today, nothing to update
+            if (appData.stats.lastReadDate === today) {
+                return;
+            }
+            
+            if (!appData.stats.lastReadDate) {
+                // First time reading
+                appData.stats.currentStreak = 1;
+                appData.stats.lastReadDate = today;
+                appData.stats.recoveryDayUsed = false;
+            } else {
+                const lastDate = new Date(appData.stats.lastReadDate);
+                const currentDate = new Date(today);
+                
+                // Calculate days between last read and today
+                const daysDiff = getDaysBetween(lastDate, currentDate);
+                
+                if (daysDiff === 1) {
+                    // Consecutive day
+                    appData.stats.currentStreak++;
+                    appData.stats.lastReadDate = today;
+                    // Reset recovery day when we have consecutive days
+                    appData.stats.recoveryDayUsed = false;
+                } else if (daysDiff === 2 && !appData.stats.recoveryDayUsed) {
+                    // Use recovery day
+                    appData.stats.currentStreak++;
+                    appData.stats.lastReadDate = today;
+                    appData.stats.recoveryDayUsed = true;
+                } else {
+                    // Streak broken
+                    appData.stats.currentStreak = 1;
+                    appData.stats.lastReadDate = today;
+                    appData.stats.recoveryDayUsed = false;
+                }
+            }
+            
+            // Update longest streak if current is higher
+            if (appData.stats.currentStreak > appData.stats.longestStreak) {
+                appData.stats.longestStreak = appData.stats.currentStreak;
+            }
+        }
+
+        // Refresh all UI components
+        function refreshUI() {
+            if (dashboardView.classList.contains('hidden') && libraryView.classList.contains('hidden')) {
+                // Settings view is active
+                refreshSettings();
+            } else if (dashboardView.classList.contains('hidden')) {
+                // Library view is active
+                refreshLibrary();
+            } else {
+                // Dashboard view is active
+                refreshDashboard();
+            }
+        }
+
+        // Event listeners
+        function setupEventListeners() {
+            // Navigation
+            dashboardBtn.addEventListener('click', () => showView('dashboard'));
+            libraryBtn.addEventListener('click', () => showView('library'));
+            settingsBtn.addEventListener('click', () => showView('settings'));
+            
+            // Theme toggle
+            themeToggleBtn.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+            });
+            
+            // Dashboard actions
+            startReadingBtn.addEventListener('click', () => showView('library'));
+            updateProgressBtn.addEventListener('click', () => {
+                const currentlyReading = appData.books.find(book => book.status === 'reading');
+                if (currentlyReading) {
+                    openProgressModal(currentlyReading.id);
+                }
+            });
+            just5MoreBtn.addEventListener('click', just5MorePages);
+            
+            // Calendar navigation
+            prevYearBtn.addEventListener('click', () => {
+                currentYearForHeatMap--;
+                refreshHeatMap(currentYearForHeatMap);
+            });
+            nextYearBtn.addEventListener('click', () => {
+                currentYearForHeatMap++;
+                refreshHeatMap(currentYearForHeatMap);
+            });
+            
+            // Library actions
+            addBookBtn.addEventListener('click', () => openBookModal());
+            emptyLibraryAddBtn.addEventListener('click', () => openBookModal());
+            rouletteBtn.addEventListener('click', openRouletteModal);
+            
+            // Search and filters
+            searchBooks.addEventListener('input', renderLibrary);
+            filterGenre.addEventListener('change', renderLibrary);
+            filterStatus.addEventListener('change', renderLibrary);
+            sortBooks.addEventListener('change', renderLibrary);
+            
+            // Book modal
+            bookForm.addEventListener('submit', saveBook);
+            closeBookModalBtn.addEventListener('click', closeBookModal);
+            cancelBookBtn.addEventListener('click', closeBookModal);
+            
+            // Status dependent fields in book modal
+            bookStatus.addEventListener('change', () => {
+                const status = bookStatus.value;
+                
+                currentPageContainer.classList.add('hidden');
+                startDateContainer.classList.add('hidden');
+                completionDateContainer.classList.add('hidden');
+                
+                if (status === 'reading' || status === 'completed' || status === 'dnf') {
+                    currentPageContainer.classList.remove('hidden');
+                    startDateContainer.classList.remove('hidden');
+                    
+                    if (status === 'completed' || status === 'dnf') {
+                        completionDateContainer.classList.remove('hidden');
+                    }
+                }
+            });
+            
+            // Progress modal
+            progressForm.addEventListener('submit', saveProgress);
+            closeProgressModalBtn.addEventListener('click', closeProgressModal);
+            cancelProgressBtn.addEventListener('click', closeProgressModal);
+            
+            // Sync page slider and input
+            pageSlider.addEventListener('input', () => {
+                currentPage.value = pageSlider.value;
+                updateProgressDisplay(parseInt(pageSlider.value, 10), parseInt(totalPagesSpan.textContent.split(' ')[1], 10));
+            });
+            
+            currentPage.addEventListener('input', () => {
+                pageSlider.value = currentPage.value;
+                updateProgressDisplay(parseInt(currentPage.value, 10), parseInt(totalPagesSpan.textContent.split(' ')[1], 10));
+            });
+            
+            // Roulette modal
+            spinRouletteBtn.addEventListener('click', spinRoulette);
+            startReadingRouletteBtn.addEventListener('click', () => {
+                const bookId = startReadingRouletteBtn.dataset.id;
+                startReading(bookId);
+                closeRouletteModal();
+            });
+            closeRouletteModalBtn.addEventListener('click', closeRouletteModal);
+            
+            // Settings actions
+            addGenreBtn.addEventListener('click', addGenre);
+            exportDataBtn.addEventListener('click', exportData);
+            importDataBtn.addEventListener('click', importData);
+            confirmImportBtn.addEventListener('click', confirmImport);
+            closeImportExportBtn.addEventListener('click', () => {
+                importExportContainer.classList.add('hidden');
+            });
+            
+            // Version button
+            appVersionBtn.addEventListener('click', () => {
+                showToast(`BookTrack version ${APP_VERSION}`);
+            });
+        }
+
+        // Init app
+        function initApp() {
+            loadData();
+            setupEventListeners();
+            populateGenreDropdowns();
+            showView('dashboard');
+        }
+
+        // Start the app
+        initApp();
+    </script>
+</body>
+</html>
