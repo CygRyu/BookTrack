@@ -412,7 +412,7 @@
                 </div>
 
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-white mb-4">Data Management</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div>
                         <button id="exportDataBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -427,6 +427,14 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                             </svg>
                             Import Data
+                        </button>
+                    </div>
+                    <div>
+                        <button id="resetDataBtn" class="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Reset All Data
                         </button>
                     </div>
                 </div>
@@ -444,7 +452,7 @@
 
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-white mb-4">About</h3>
                 <div class="text-gray-600 dark:text-gray-300 text-sm">
-                    <p class="mb-2">BookTrack version 1.0.1</p>
+                    <p class="mb-2">BookTrack version 1.1</p>
                     <p class="mb-4">A simple reading tracker for your favorite books.</p>
                     <div class="flex gap-2">
                         <a href="https://ko-fi.com/cygryu" target="_blank" class="bg-[#FF5E5B] hover:bg-[#FF5E5B]/90 text-white font-medium py-2 px-4 rounded-md transition-colors inline-flex items-center">
@@ -667,6 +675,40 @@
             </div>
         </div>
     </div>
+    
+    <!-- Reset Confirmation Modal -->
+    <div id="resetConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full transition-colors mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">Reset All Data</h3>
+                    <button id="closeResetModalBtn" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="py-3 px-4 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded-md">
+                        <p class="font-medium">Warning!</p>
+                        <p>This will delete all your books, reading sessions, and reset all statistics. This action cannot be undone.</p>
+                    </div>
+                    
+                    <p class="text-gray-600 dark:text-gray-300">Are you sure you want to reset all data?</p>
+                    
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button id="cancelResetBtn" class="bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Cancel
+                        </button>
+                        <button id="confirmResetBtn" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
+                            Reset All Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-4 right-4 max-w-xs bg-gray-800 text-white rounded-lg shadow-lg p-4 flex items-center transition-opacity duration-300 opacity-0 pointer-events-none">
@@ -684,7 +726,7 @@
             </div>
             <div>
                 <button id="appVersionBtn" class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                    v1.0.1
+                    v1.1
                 </button>
             </div>
         </div>
@@ -704,7 +746,7 @@
         });
 
         // App state and constants
-        const APP_VERSION = '1.0.1';
+        const APP_VERSION = '1.1';
         const STORAGE_KEY = 'bookTrackData';
         
         // Default genres with colors
@@ -854,6 +896,12 @@
         const confirmImportBtn = document.getElementById('confirmImportBtn');
         const closeImportExportBtn = document.getElementById('closeImportExportBtn');
         
+        const resetDataBtn = document.getElementById('resetDataBtn');
+        const resetConfirmModal = document.getElementById('resetConfirmModal');
+        const closeResetModalBtn = document.getElementById('closeResetModalBtn');
+        const cancelResetBtn = document.getElementById('cancelResetBtn');
+        const confirmResetBtn = document.getElementById('confirmResetBtn');
+        
         const toast = document.getElementById('toast');
         const toastIcon = document.getElementById('toastIcon');
         const toastMessage = document.getElementById('toastMessage');
@@ -987,6 +1035,42 @@
                 };
                 saveData();
             }
+        }
+
+        // Reset all app data
+        function resetAllData() {
+            // Reset to default values
+            appData = {
+                version: APP_VERSION,
+                books: [],
+                readingSessions: [],
+                genres: [...DEFAULT_GENRES],
+                stats: {
+                    longestStreak: 0,
+                    currentStreak: 0,
+                    lastReadDate: null,
+                    recoveryDayUsed: false,
+                    totalPagesRead: 0,
+                    mostPagesInOneDay: 0,
+                    mostActiveReadingDay: null,
+                    fastestReadBook: null,
+                    longestBook: null
+                },
+                settings: { theme: 'system' }
+            };
+            saveData();
+            
+            closeResetModal();
+            refreshUI();
+            showToast('All data has been reset successfully', 'success');
+        }
+
+        function openResetModal() {
+            resetConfirmModal.classList.remove('hidden');
+        }
+
+        function closeResetModal() {
+            resetConfirmModal.classList.add('hidden');
         }
 
         // Export/Import data
@@ -2390,6 +2474,12 @@
             closeImportExportBtn.addEventListener('click', () => {
                 importExportContainer.classList.add('hidden');
             });
+            
+            // Reset data
+            resetDataBtn.addEventListener('click', openResetModal);
+            closeResetModalBtn.addEventListener('click', closeResetModal);
+            cancelResetBtn.addEventListener('click', closeResetModal);
+            confirmResetBtn.addEventListener('click', resetAllData);
             
             // Version button
             appVersionBtn.addEventListener('click', () => {
