@@ -2294,7 +2294,7 @@
         }
 
         function calculateReadingPace(book) {
-            if (!book.startDate || book.currentPage === 0) return null;
+            if (!book.startDate) return null;
             
             // Get all reading sessions for this book
             const sessions = appData.readingSessions
@@ -2307,13 +2307,16 @@
             const firstSessionDate = new Date(sessions[0].date);
             const lastSessionDate = new Date(sessions[sessions.length - 1].date);
             
-            // If only one day of reading, return pages read
+            // Calculate total pages read in all sessions
+            const totalPagesRead = sessions.reduce((sum, session) => sum + (session.pagesRead || 0), 0);
+            
+            // If only one day of reading, use total pages read that day
             if (formatDate(firstSessionDate) === formatDate(lastSessionDate)) {
-                return book.currentPage;
+                return totalPagesRead;
             }
             
             const daysDiff = Math.max(1, getDaysBetween(firstSessionDate, lastSessionDate));
-            return Math.round(book.currentPage / daysDiff);
+            return Math.round(totalPagesRead / daysDiff);
         }
 
         function updateReadingStreak() {
