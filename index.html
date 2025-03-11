@@ -2294,27 +2294,30 @@
         }
 
         function calculateReadingPace(book) {
-            if (!book.startDate || book.currentPage === 0) return null;
-            
-            // Get all reading sessions for this book
-            const sessions = appData.readingSessions
-                .filter(session => session.bookId === book.id)
-                .sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            if (sessions.length === 0) return null;
-            
-            // Calculate days between first session and latest session
-            const firstSessionDate = new Date(sessions[0].date);
-            const lastSessionDate = new Date(sessions[sessions.length - 1].date);
-            
-            // If only one day of reading, return pages read
-            if (formatDate(firstSessionDate) === formatDate(lastSessionDate)) {
-                return book.currentPage;
-            }
-            
-            const daysDiff = Math.max(1, getDaysBetween(firstSessionDate, lastSessionDate));
-            return Math.round(book.currentPage / daysDiff);
-        }
+    if (!book.startDate || book.currentPage === 0) return null;
+    
+    // Get all reading sessions for this book
+    const sessions = appData.readingSessions
+        .filter(session => session.bookId === book.id)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    if (sessions.length === 0) return null;
+    
+    // Calculate days between first session and latest session
+    const firstSessionDate = new Date(sessions[0].date);
+    const lastSessionDate = new Date(sessions[sessions.length - 1].date);
+    
+    // Calculate total pages read from all sessions
+    const totalPagesRead = sessions.reduce((total, session) => total + (session.pagesRead || 0), 0);
+    
+    // If only one day of reading, return pages read in that day
+    if (formatDate(firstSessionDate) === formatDate(lastSessionDate)) {
+        return totalPagesRead;
+    }
+    
+    const daysDiff = Math.max(1, getDaysBetween(firstSessionDate, lastSessionDate));
+    return Math.round(totalPagesRead / daysDiff);
+}
 
         function updateReadingStreak() {
             const today = todayDateString();
