@@ -2294,30 +2294,33 @@
         }
 
         function calculateReadingPace(book) {
-            if (!book.startDate) return null;
-            
-            // Get all reading sessions for this book
-            const sessions = appData.readingSessions
-                .filter(session => session.bookId === book.id)
-                .sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            if (sessions.length === 0) return null;
-            
-            // Calculate days between first session and latest session
-            const firstSessionDate = new Date(sessions[0].date);
-            const lastSessionDate = new Date(sessions[sessions.length - 1].date);
-            
-            // Calculate total pages read in all sessions
-            const totalPagesRead = sessions.reduce((sum, session) => sum + (session.pagesRead || 0), 0);
-            
-            // If only one day of reading, use total pages read that day
-            if (formatDate(firstSessionDate) === formatDate(lastSessionDate)) {
-                return totalPagesRead;
-            }
-            
-            const daysDiff = Math.max(1, getDaysBetween(firstSessionDate, lastSessionDate));
-            return Math.round(totalPagesRead / daysDiff);
-        }
+    if (!book.startDate || book.currentPage === 0) return null;
+
+    // Get all reading sessions for this book
+    const sessions = appData.readingSessions
+        .filter(session => session.bookId === book.id)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (sessions.length === 0) return null;
+
+    // Get unique days with reading sessions
+    const uniqueDays = new Set();
+    sessions.forEach(session => {
+        const dateStr = formatDate(new Date(session.date));
+        uniqueDays.add(dateStr);
+    });
+
+    // Calculate total days of reading
+    const totalDays = uniqueDays.size;
+
+    // If only one day of reading, return pages read
+    if (totalDays === 1) {
+        return book.currentPage;
+    }
+
+    // Calculate reading pace
+    return Math.round(book.currentPage / totalDays);
+}
 
         function updateReadingStreak() {
             const today = todayDateString();
