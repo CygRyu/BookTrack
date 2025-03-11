@@ -2303,20 +2303,25 @@
     
     if (sessions.length === 0) return null;
     
-    // Calculate days between first session and latest session
-    const firstSessionDate = new Date(sessions[0].date);
-    const lastSessionDate = new Date(sessions[sessions.length - 1].date);
+    // Get unique reading days by converting timestamps to date strings
+    const uniqueReadingDays = new Set();
+    sessions.forEach(session => {
+        const dateStr = formatDate(session.date);
+        uniqueReadingDays.add(dateStr);
+    });
     
     // Calculate total pages read from all sessions
     const totalPagesRead = sessions.reduce((total, session) => total + (session.pagesRead || 0), 0);
     
-    // If only one day of reading, return pages read in that day
-    if (formatDate(firstSessionDate) === formatDate(lastSessionDate)) {
+    // Number of days is the count of unique dates
+    const numberOfReadingDays = uniqueReadingDays.size;
+    
+    // If no reading days (shouldn't happen) or only one day, return total pages
+    if (numberOfReadingDays <= 1) {
         return totalPagesRead;
     }
     
-    const daysDiff = Math.max(1, getDaysBetween(firstSessionDate, lastSessionDate));
-    return Math.round(totalPagesRead / daysDiff);
+    return Math.round(totalPagesRead / numberOfReadingDays);
 }
 
         function updateReadingStreak() {
