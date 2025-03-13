@@ -9,16 +9,6 @@
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-base64@3.7.5/base64.min.js"></script>
     <style>
-        .heat-map-cell {
-            width: 12px;
-            height: 12px;
-            margin: 1px;
-            border-radius: 2px;
-            transition: transform 0.2s ease;
-        }
-        .heat-map-cell:hover {
-            transform: scale(1.5);
-        }
         .reading-chain {
             display: flex;
             flex-wrap: wrap;
@@ -88,10 +78,6 @@
         /* Fix for mobile overflow */
         body {
             overflow-x: hidden;
-        }
-        .heat-map-container {
-            max-width: 100%;
-            overflow-x: auto;
         }
         canvas {
             max-width: 100%;
@@ -229,43 +215,6 @@
                                 +5 Pages
                             </button>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Reading Calendar Card -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 transition-colors">
-                    <h2 class="text-lg font-semibold text-gray-700 dark:text-white mb-3 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        Reading Activity
-                    </h2>
-                    <div class="mb-2 flex justify-between items-center">
-                        <div id="calendarYear" class="text-sm font-medium text-gray-700 dark:text-gray-300"></div>
-                        <div class="flex space-x-1">
-                            <button id="prevYearBtn" class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                                </svg>
-                            </button>
-                            <button id="nextYearBtn" class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="heatMapContainer" class="heat-map-container"></div>
-                    <div class="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Less</span>
-                        <div class="flex items-center">
-                            <div class="heat-map-cell bg-gray-200 dark:bg-gray-700"></div>
-                            <div class="heat-map-cell bg-primary opacity-25"></div>
-                            <div class="heat-map-cell bg-primary opacity-50"></div>
-                            <div class="heat-map-cell bg-primary opacity-75"></div>
-                            <div class="heat-map-cell bg-primary"></div>
-                        </div>
-                        <span>More</span>
                     </div>
                 </div>
 
@@ -812,11 +761,6 @@
         const updateProgressBtn = document.getElementById('updateProgressBtn');
         const just5MoreBtn = document.getElementById('just5MoreBtn');
         
-        const calendarYear = document.getElementById('calendarYear');
-        const prevYearBtn = document.getElementById('prevYearBtn');
-        const nextYearBtn = document.getElementById('nextYearBtn');
-        const heatMapContainer = document.getElementById('heatMapContainer');
-        
         const mostPagesDay = document.getElementById('mostPagesDay');
         const fastestRead = document.getElementById('fastestRead');
         const longestBook = document.getElementById('longestBook');
@@ -910,7 +854,6 @@
 
         // Chart instances
         let readingChart = null;
-        let currentYearForHeatMap = new Date().getFullYear();
 
         // Utility functions
         function generateId() {
@@ -1165,7 +1108,6 @@
             refreshStreakCounter();
             refreshReadingChain();
             refreshCurrentBook();
-            refreshHeatMap(currentYearForHeatMap);
             refreshRecords();
             refreshReadingStats();
             refreshVirtualBookshelf();
@@ -1261,144 +1203,6 @@
             } else {
                 readingForecast.textContent = 'At your current pace, finish date is unknown';
             }
-        }
-
-        function refreshHeatMap(year) {
-            calendarYear.textContent = year;
-            heatMapContainer.innerHTML = '';
-            
-            const DateTime = luxon.DateTime;
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            
-            // Group sessions by date
-            const sessionsByDate = {};
-            appData.readingSessions.forEach(session => {
-                const date = formatDate(session.date);
-                if (new Date(date).getFullYear() === year) {
-                    if (!sessionsByDate[date]) {
-                        sessionsByDate[date] = { pages: 0, minutes: 0 };
-                    }
-                    sessionsByDate[date].pages += (session.pagesRead || 0);
-                    sessionsByDate[date].minutes += (session.minutes || 0);
-                }
-            });
-            
-            // Find max pages read in a day for scaling
-            let maxPages = 0;
-            Object.values(sessionsByDate).forEach(day => {
-                if (day.pages > maxPages) maxPages = day.pages;
-            });
-            if (maxPages === 0) maxPages = 1; // Avoid division by zero
-            
-            // Create month labels
-            const monthLabelsDiv = document.createElement('div');
-            monthLabelsDiv.className = 'flex mb-1';
-            monthLabelsDiv.innerHTML = '<div style="width: 20px;"></div>'; // Spacer for day labels
-            
-            monthNames.forEach(month => {
-                const monthLabel = document.createElement('div');
-                monthLabel.className = 'text-xs text-gray-500 dark:text-gray-400 flex-grow text-center';
-                monthLabel.textContent = month;
-                monthLabelsDiv.appendChild(monthLabel);
-            });
-            
-            heatMapContainer.appendChild(monthLabelsDiv);
-            
-            // Create container for days and cells
-            const calendarGrid = document.createElement('div');
-            calendarGrid.className = 'flex';
-            
-            // Day labels (0-6: Sun-Sat)
-            const dayLabelsDiv = document.createElement('div');
-            dayLabelsDiv.className = 'flex flex-col mr-1';
-            dayLabelsDiv.style.width = '20px';
-            
-            const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-            dayNames.forEach(day => {
-                const dayLabel = document.createElement('div');
-                dayLabel.className = 'text-xs text-gray-500 dark:text-gray-400 h-[14px] flex items-center justify-center';
-                dayLabel.textContent = day;
-                dayLabelsDiv.appendChild(dayLabel);
-            });
-            
-            calendarGrid.appendChild(dayLabelsDiv);
-            
-            // Loop through each month
-            for (let month = 0; month < 12; month++) {
-                const monthContainer = document.createElement('div');
-                monthContainer.className = 'flex flex-col flex-grow';
-                
-                // Determine first day of month (0-6: Sun-Sat)
-                const firstDay = DateTime.local(year, month + 1, 1).weekday % 7;
-                
-                // Determine number of days in month
-                const daysInMonth = DateTime.local(year, month + 1).daysInMonth;
-                
-                // Create cells for each day
-                const cells = [];
-                
-                // Add empty cells for days before the 1st of the month
-                for (let i = 0; i < firstDay; i++) {
-                    cells.push(null);
-                }
-                
-                // Add cells for each day of the month
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const dayData = sessionsByDate[date];
-                    
-                    let intensity = 0;
-                    if (dayData) {
-                        intensity = Math.min(1, dayData.pages / maxPages);
-                    }
-                    
-                    cells.push({
-                        date,
-                        intensity,
-                        tooltip: dayData ? `${formatDisplayDate(date)}: ${dayData.pages} pages read` : `${formatDisplayDate(date)}: No reading`
-                    });
-                }
-                
-                // Group cells into weeks (rows)
-                while (cells.length > 0) {
-                    const weekCells = cells.splice(0, 7);
-                    
-                    // Create week container
-                    const weekContainer = document.createElement('div');
-                    weekContainer.className = 'flex';
-                    
-                    // Add cells to week
-                    weekCells.forEach(cell => {
-                        const cellDiv = document.createElement('div');
-                        cellDiv.className = 'heat-map-cell';
-                        
-                        if (cell) {
-                            const opacity = cell.intensity;
-                            cellDiv.style.backgroundColor = `rgba(93, 92, 222, ${opacity})`;
-                            cellDiv.title = cell.tooltip;
-                            
-                            // For dark mode, add a lower bound on opacity to ensure visibility
-                            cellDiv.style.opacity = Math.max(0.15, opacity);
-                            
-                            // If no reading, use gray background
-                            if (opacity === 0) {
-                                cellDiv.classList.add('bg-gray-200', 'dark:bg-gray-700');
-                                cellDiv.style.backgroundColor = '';
-                            }
-                        } else {
-                            cellDiv.style.visibility = 'hidden';
-                        }
-                        
-                        weekContainer.appendChild(cellDiv);
-                    });
-                    
-                    monthContainer.appendChild(weekContainer);
-                }
-                
-                calendarGrid.appendChild(monthContainer);
-            }
-            
-            heatMapContainer.appendChild(calendarGrid);
         }
 
         function refreshRecords() {
@@ -2404,16 +2208,6 @@
                 }
             });
             just5MoreBtn.addEventListener('click', just5MorePages);
-            
-            // Calendar navigation
-            prevYearBtn.addEventListener('click', () => {
-                currentYearForHeatMap--;
-                refreshHeatMap(currentYearForHeatMap);
-            });
-            nextYearBtn.addEventListener('click', () => {
-                currentYearForHeatMap++;
-                refreshHeatMap(currentYearForHeatMap);
-            });
             
             // Library actions
             addBookBtn.addEventListener('click', () => openBookModal());
